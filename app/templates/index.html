@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Monday API Lab</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <main class="chat-shell">
+    <h1>Monday API Lab</h1>
+    <p class="subtitle">Private local prototype chat foundation.</p>
+    <section id="messages" class="messages" aria-live="polite"></section>
+    <p id="status" class="status"></p>
+    <form id="chat-form">
+      <textarea id="message-input" rows="3" placeholder="Type a test message..." required></textarea>
+      <button type="submit">Send</button>
+    </form>
+  </main>
+  <script src="/static/chat.js"></script>
+</body>
+</html>
