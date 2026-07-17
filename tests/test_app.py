@@ -42,6 +42,12 @@ def test_startup_without_api_key(tmp_path):
     assert client.get("/health").json() == {"status": "ok", "model_configured": False}
 
 
+def test_homepage_returns_ok(tmp_path):
+    client = TestClient(create_app(settings(tmp_path)))
+    res = client.get("/")
+    assert res.status_code == 200
+
+
 def test_memory_loading(tmp_path):
     cfg = settings(tmp_path)
     loader = MemoryLoader(cfg.persona_path, cfg.stable_memory_path)
