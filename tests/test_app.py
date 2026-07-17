@@ -1,3 +1,4 @@
+import sqlite3
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -137,3 +138,15 @@ def test_limited_message_retrieval_returns_newest_messages_chronologically(tmp_p
     messages = repo.list_messages(conversation.conversation_id, limit=3)
 
     assert [message.text for message in messages] == ["message-2", "message-3", "message-4"]
+
+
+def test_orphan_messages_are_rejected(tmp_path):
+    app = create_app(settings(tmp_path))
+    repo = app.state.repository
+
+    try:
+        repo.add_message("missing-conversation", "user", "orphan")
+    except sqlite3.IntegrityError as exc:
+        assert "FOREIGN KEY constraint failed" in str(exc)
+    else:
+        raise AssertionError("Expected orphan message insert to fail")

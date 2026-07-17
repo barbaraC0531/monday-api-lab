@@ -39,12 +39,12 @@ class ConversationRepository:
 
     def connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.database_path)
+        conn.execute("PRAGMA foreign_keys = ON")
         conn.row_factory = sqlite3.Row
         return conn
 
     def initialize(self) -> None:
         with self.connect() as conn:
-            conn.execute("PRAGMA foreign_keys = ON")
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS conversations (
                     conversation_id TEXT PRIMARY KEY,
