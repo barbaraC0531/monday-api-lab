@@ -20,8 +20,6 @@ class ChatService:
 
     def add_user_message_and_generate(self, conversation_id: str, text: str):
         previous_messages = self.repository.list_messages(conversation_id)
-        user_message = self.repository.add_message(conversation_id, "user", text)
         context = self.context_builder.build(previous_messages, text)
         result = self.model_client.generate(context)
-        assistant_message = self.repository.add_message(conversation_id, "assistant", result.text, result.response_id)
-        return user_message, assistant_message
+        return self.repository.add_user_assistant_turn(conversation_id, text, result.text, result.response_id)

@@ -92,3 +92,48 @@ def test_api_error_handling_for_missing_key(tmp_path):
     res = client.post(f"/api/conversations/{conversation_id}/messages", json={"text": "hello"})
     assert res.status_code == 503
     assert "OPENAI_API_KEY" in res.json()["detail"]
+
+
+class FailingModelClient:
+    def generate(self, messages):
+        raise RuntimeError("model failure")
+
+
+def test_failed_model_call_does_not_persist_either_message(tmp_path):
+    app = create_app(settings(tmp_path))
+    app.state.chat_service.model_client = FailingModelClient()
+    conversation = app.state.repository.create_conversation()
+
+    try:
+        app.state.chat_service.add_user_message_and_generate(conversation.conversation_id, "do not save")
+    except RuntimeError as exc:
+        assert str(exc) == "model failure"
+    else:
+        raise AssertionError("Expected model failure")
+
+    assert app.state.repository.list_messages(conversation.conversation_id) == []
+
+
+def test_successful_user_assistant_turn_is_stored_together(tmp_path):
+    app = create_app(settings(tmp_path))
+    app.state.chat_service.model_client = FakeModelClient("saved assistant")
+    conversation = app.state.repository.create_conversation()
+
+    user_message, assistant_message = app.state.chat_service.add_user_message_and_generate(conversation.conversation_id, "save user")
+
+    messages = app.state.repository.list_messages(conversation.conversation_id)
+    assert messages == [user_message, assistant_message]
+    assert [message.role for message in messages] == ["user", "assistant"]
+    assert [message.text for message in messages] == ["save user", "saved assistant"]
+
+
+def test_limited_message_retrieval_returns_newest_messages_chronologically(tmp_path):
+    app = create_app(settings(tmp_path))
+    repo = app.state.repository
+    conversation = repo.create_conversation()
+    for index in range(5):
+        repo.add_message(conversation.conversation_id, "user", f"message-{index}")
+
+    messages = repo.list_messages(conversation.conversation_id, limit=3)
+
+    assert [message.text for message in messages] == ["message-2", "message-3", "message-4"]

@@ -75,20 +75,52 @@ class ConversationRepository:
             row = conn.execute("SELECT * FROM conversations WHERE conversation_id = ?", (conversation_id,)).fetchone()
         return ConversationRecord(row["conversation_id"], _parse_dt(row["created_at"])) if row else None
 
-    def add_message(self, conversation_id: str, role: str, text: str, model_response_id: str | None = None) -> MessageRecord:
+    def _insert_message(
+        self,
+        conn: sqlite3.Connection,
+        conversation_id: str,
+        role: str,
+        text: str,
+        model_response_id: str | None = None,
+    ) -> MessageRecord:
         record = MessageRecord(str(uuid4()), conversation_id, role, text, _utc_now(), model_response_id)
-        with self.connect() as conn:
-            conn.execute(
-                "INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?)",
-                (record.message_id, conversation_id, role, text, record.created_at.isoformat(), model_response_id),
-            )
+        conn.execute(
+            "INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?)",
+            (record.message_id, conversation_id, role, text, record.created_at.isoformat(), model_response_id),
+        )
         return record
 
+    def add_message(self, conversation_id: str, role: str, text: str, model_response_id: str | None = None) -> MessageRecord:
+        with self.connect() as conn:
+            return self._insert_message(conn, conversation_id, role, text, model_response_id)
+
+    def add_user_assistant_turn(
+        self,
+        conversation_id: str,
+        user_text: str,
+        assistant_text: str,
+        model_response_id: str | None = None,
+    ) -> tuple[MessageRecord, MessageRecord]:
+        with self.connect() as conn:
+            conn.execute("BEGIN")
+            user_message = self._insert_message(conn, conversation_id, "user", user_text)
+            assistant_message = self._insert_message(conn, conversation_id, "assistant", assistant_text, model_response_id)
+            return user_message, assistant_message
+
     def list_messages(self, conversation_id: str, limit: int | None = None) -> list[MessageRecord]:
-        sql = "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC"
-        params: tuple[object, ...] = (conversation_id,)
-        if limit is not None:
-            sql += " LIMIT ?"
+        if limit is None:
+            sql = "SELECT * FROM messages WHERE conversation_id = ? ORDER BY created_at ASC, rowid ASC"
+            params: tuple[object, ...] = (conversation_id,)
+        else:
+            sql = """
+                SELECT * FROM (
+                    SELECT messages.*, rowid AS message_rowid FROM messages
+                    WHERE conversation_id = ?
+                    ORDER BY created_at DESC, rowid DESC
+                    LIMIT ?
+                )
+                ORDER BY created_at ASC, message_rowid ASC
+            """
             params = (conversation_id, limit)
         with self.connect() as conn:
             rows = conn.execute(sql, params).fetchall()
