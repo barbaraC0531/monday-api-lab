@@ -1,5 +1,15 @@
+import re
+
 from app.database.repository import MessageRecord
 from app.memory.loaders import MemoryLoader
+
+
+_RUNTIME_CLAIM_ID = re.compile(r"^([ \t]*-[ \t]+)\[(?:P|S|C)-\d{3}\][ \t]+", re.MULTILINE)
+
+
+def prepare_runtime_memory(markdown: str) -> str:
+    """Hide audit claim IDs from model-facing Markdown without changing source files."""
+    return _RUNTIME_CLAIM_ID.sub(r"\1", markdown)
 
 
 class ContextBuilder:
@@ -8,8 +18,8 @@ class ContextBuilder:
         self.recent_message_limit = recent_message_limit
 
     def build(self, recent_messages: list[MessageRecord], current_user_message: str) -> list[dict[str, str]]:
-        persona = self.memory_loader.load_persona() or "You are Monday, a fictional local prototype assistant."
-        stable_memory = self.memory_loader.load_stable_memory()
+        persona = prepare_runtime_memory(self.memory_loader.load_persona()) or "You are Monday, a fictional local prototype assistant."
+        stable_memory = prepare_runtime_memory(self.memory_loader.load_stable_memory())
         instructions = ["# Persona Instructions", persona]
         if stable_memory:
             instructions.extend(["# Stable Memory", stable_memory])
