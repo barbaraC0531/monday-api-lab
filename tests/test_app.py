@@ -80,6 +80,45 @@ def test_context_construction(tmp_path):
     assert context[-1] == {"role": "user", "content": "new"}
 
 
+def test_context_hides_audit_claim_ids_without_modifying_memory_files(tmp_path: Path):
+    persona = tmp_path / "persona.md"
+    stable = tmp_path / "stable.md"
+    persona_text = (
+        "# Persona\n"
+        "- [P-001] Persona content remains available.\n"
+        "- Ordinary [bracketed conversational text] remains intact.\n"
+        "A non-leading [P-999] reference remains intact."
+    )
+    stable_text = (
+        "# Stable Memory\n"
+        "- [S-024] Stable-memory content remains available.\n"
+        "- [C-030] Future continuity claims use the same presentation rule.\n"
+        "- [X-001] Unapproved bracket tokens remain intact."
+    )
+    persona.write_text(persona_text, encoding="utf-8")
+    stable.write_text(stable_text, encoding="utf-8")
+    cfg = Settings(
+        OPENAI_API_KEY=None,
+        DATABASE_PATH=tmp_path / "test.db",
+        persona_path=persona,
+        stable_memory_path=stable,
+    )
+
+    context = ContextBuilder(MemoryLoader(cfg.persona_path, cfg.stable_memory_path)).build([], "hello")
+    system_content = context[0]["content"]
+
+    assert "Persona content remains available." in system_content
+    assert "Stable-memory content remains available." in system_content
+    assert "[P-001]" not in system_content
+    assert "[S-024]" not in system_content
+    assert "[C-030]" not in system_content
+    assert "[bracketed conversational text]" in system_content
+    assert "A non-leading [P-999] reference remains intact." in system_content
+    assert "[X-001] Unapproved bracket tokens remain intact." in system_content
+    assert persona.read_text(encoding="utf-8") == persona_text
+    assert stable.read_text(encoding="utf-8") == stable_text
+
+
 def test_fake_model_responses():
     result = FakeModelClient("deterministic").generate([])
     assert result.text == "deterministic"
